@@ -1,0 +1,18 @@
+{
+    "manifest_version": 2,
+    "name": "MY FIRST EXTENSION",
+    "version": "1.0",
+
+    "icons": {
+        "32": "icons/icon_32.png"
+    },
+
+    "permissions": [
+        "activeTab"
+    ],
+
+    "browser_action": {
+        "default_title": "TITLE",
+        "default_popup": "popup/popup.html"
+    }
+}
