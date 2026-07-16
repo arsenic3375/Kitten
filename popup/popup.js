@@ -15,18 +15,46 @@ class Cat{
         this.fatigue     = 0;
         this.boredom     = 0;
         
-        this.max_hunger  = 100;
-        this.max_fatigue = 100;
-        this.max_boredom = 100;
-
-
+        this.behaviors = new Map();
+        this.behaviors.set(
+            {hunger_min     = 100,  hunger_max      = 100,
+             fatigue_min    = 0,    fatigue_max     = 100,
+             boredom_min    = 0,    boredom_max     = 100},
+            {probability = 1.00, behavior = this.die_hunger}
+        );
+        this.behaviors.set(
+            {hunger_min     = 0,    hunger_max      = 100,
+             fatigue_min    = 100,  fatigue_max     = 100,
+             boredom_min    = 0,    boredom_max     = 100},
+            {probability = 1.00, behavior = this.die_fatiuge}
+        );
+        this.behaviors.set(
+            {hunger_min     = 0,    hunger_max      = 50,
+             fatigue_min    = 75,   fatigue_max     = 100,
+             boredom_min    = 0,    boredom_max     = 50},
+            {probability = 1.00, behavior = this.sleep}
+        );
     }
+
+    die_hunger() {}
+    die_fatiuge() {}
 
     eat() {}
     sleep() {}
     play() {}
 
-    draw() {}
+    draw() {
+        let filtered_behaviors = 
+        Array.from(this.behaviors .entries())
+        .filter(([key, value]) => {
+            return this.hunger >= key.hunger_min && this.hunger < key.hunger_max &&
+                   this.fatigue >= key.fatigue_min && this.fatigue < key.fatigue_max &&
+                   this.boredom >= key.boredom_min && this.boredom < key.boredom_max;
+        })
+        .map(([key, value]) => {value});
+
+        //Select behavior from filtered_behaviors based on probability
+    }
 }
 
 /*
