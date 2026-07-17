@@ -1,61 +1,172 @@
-let canvas = document.getElementById("canvas");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-let ctx = canvas.getContext("2d");
-
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+ 
+const feed_button = document.getElementById("X");
+const play_button = document.getElementById("O");
+ 
 function background(color) {
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
-
-class Cat{
-    constructor(){
-        this.hunger      = 0;
-        this.fatigue     = 0;
-        this.boredom     = 0;
+ 
+class Cat {
+    constructor() {
+        this.hunger  = 0;
+        this.fatigue = 0;
+        this.boredom = 0;
+        this.alive   = true;
+ 
+        this.hungerRate  = 2;
+        this.fatigueRate = 1.5;
+        this.boredomRate = 3;
+ 
+        this.mood = [];
+ 
+        this.moods = [
+            { mood: "starving",  test: () => this.hunger  >= 100 },
+            { mood: "hungry",    test: () => this.hunger  >= 50  && this.hunger  < 100 },
+            { mood: "exhausted", test: () => this.fatigue >= 100 },
+            { mood: "tired",     test: () => this.fatigue >= 50  && this.fatigue < 100 },
+            { mood: "bored",     test: () => this.boredom >= 50 },
+        ];
+ 
+        this.passive_behaviors = [
+            { moods: ["starving"], behaviors: [
+                { frequency: 1, behavior: this.eat.bind(this),        duration: 2000 },
+                { frequency: 1, behavior: this.die_hunger.bind(this), duration: 0 },
+            ]},
+            { moods: ["hungry", "exhausted"], behaviors: [
+                { frequency: 1, behavior: this.die_fatigue.bind(this), duration: 0 },
+            ]},
+            { moods: ["hungry"], behaviors: [
+                { frequency: 1, behavior: this.eat.bind(this), duration: 2000 },
+            ]},
+            { moods: ["hungry", "bored"], behaviors: [
+                { frequency: 1, behavior: this.eat.bind(this),      duration: 2000 },
+                { frequency: 2, behavior: this.lick_paw.bind(this), duration: 1500 },
+            ]},
+            { moods: ["exhausted"], behaviors: [
+                { frequency: 1, behavior: this.sleep.bind(this), duration: 5000 },
+            ]},
+            { moods: ["tired", "bored"], behaviors: [
+                { frequency: 1, behavior: this.nap.bind(this), duration: 4000 },
+            ]},
+            { moods: ["bored"], behaviors: [
+                { frequency: 1, behavior: this.catch_tail.bind(this),  duration: 1500 },
+                { frequency: 2, behavior: this.scratch_ear.bind(this), duration: 1000 },
+            ]},
+            { moods: [], behaviors: [
+                { frequency: 1, behavior: this.idle.bind(this), duration: 2000 },
+            ]},
+        ];
+ 
+        this.feeding_behaviors = [
+            { moods: ["hungry"], behaviors: [
+                { frequency: 1, behavior: this.eat.bind(this), duration: 2000 },
+            ]},
+            { moods: ["bored"], behaviors: [
+                { frequency: 1, behavior: this.knock_over_food.bind(this), duration: 1500 },
+            ]},
+            { moods: [], behaviors: [
+                { frequency: 1, behavior: this.eat.bind(this), duration: 2000 },
+            ]},
+        ];
+ 
+        this.playing_behaviors = [
+            { moods: ["hungry"], behaviors: [
+                { frequency: 1, behavior: this.angry.bind(this), duration: 1500 },
+            ]},
+            { moods: ["bored"], behaviors: [
+                { frequency: 2, behavior: this.pet.bind(this),       duration: 1500 },
+                { frequency: 2, behavior: this.jump.bind(this),      duration: 1000 },
+                { frequency: 2, behavior: this.belly_rub.bind(this), duration: 1500 },
+            ]},
+            { moods: ["tired"], behaviors: [
+                { frequency: 1, behavior: this.annoyed.bind(this), duration: 1500 },
+            ]},
+            { moods: [], behaviors: [
+                { frequency: 1, behavior: this.ignore.bind(this), duration: 1000 },
+            ]},
+        ];
+ 
+        this.current = null;
+        this.queue   = [];
+    }
+ 
+    die_hunger()        { this.alive = false; }
+    die_fatigue()       { this.alive = false; }
+    sleep()             {}
+    nap()               {}
+    eat()               { this.hunger  = Math.max(0, this.hunger  - 50); }
+    lick_paw()          {}
+    scratch_ear()       {}
+    catch_tail()        { this.boredom = Math.max(0, this.boredom - 20); }
+    angry()             {}
+    ignore()            {}
+    annoyed()           {}
+    pet()               { this.boredom = Math.max(0, this.boredom - 30); }
+    jump()              {}
+    belly_rub()         {}
+    knock_over_food()   {}
+    idle()              {}
+ 
+    enqueue(type, choice) {
+        if (!choice) return;
+        const action = { type, fn: choice.behavior, duration: choice.duration, elapsed: 0 };
+        const tailType = this.queue.length ? this.queue[this.queue.length - 1].type : (this.current ? this.current.type : null);
+ 
+        if (tailType === null || tailType === type) {
+            this.queue.push(action);
+        } else {
+            this.queue.unshift(action);
+        }
+    }
+ 
+    request(behaviorList, type) {
+        const moodSet = new Set(this.mood);
+        const options = behaviorList
+            .filter(e => e.moods.every(m => moodSet.has(m)))
+            .flatMap(e => e.behaviors);
+        if (options.length === 0) return;
+        const weighted = options.flatMap(o => Array(o.frequency).fill(o));
+        this.enqueue(type, weighted[Math.floor(Math.random() * weighted.length)]);
+    }
+ 
+    feed() { this.request(this.feeding_behaviors, "feeding"); }
+    play()  { this.request(this.playing_behaviors, "playing"); }
+ 
+    update(dt) {
+        if (!this.alive) return;
+ 
+        this.hunger  = Math.min(100, this.hunger  + this.hungerRate  * dt);
+        this.fatigue = Math.min(100, this.fatigue + this.fatigueRate * dt);
+        this.boredom = Math.min(100, this.boredom + this.boredomRate * dt);
+ 
+        this.mood = this.moods.filter(m => m.test()).map(m => m.mood);
+ 
+        if (this.current) {
+            this.current.elapsed += dt * 1000;
+            if (this.current.elapsed >= this.current.duration) {
+                this.current = null;
+            }
+        }
+ 
+        if (!this.current && this.queue.length === 0) {
+            this.request(this.passive_behaviors, "passive");
+        }
         
-        this.behaviors = new Map();
-        this.behaviors.set(
-            {hunger_min     = 100,  hunger_max      = 100,
-             fatigue_min    = 0,    fatigue_max     = 100,
-             boredom_min    = 0,    boredom_max     = 100},
-            {probability = 1.00, behavior = this.die_hunger}
-        );
-        this.behaviors.set(
-            {hunger_min     = 0,    hunger_max      = 100,
-             fatigue_min    = 100,  fatigue_max     = 100,
-             boredom_min    = 0,    boredom_max     = 100},
-            {probability = 1.00, behavior = this.die_fatiuge}
-        );
-        this.behaviors.set(
-            {hunger_min     = 0,    hunger_max      = 50,
-             fatigue_min    = 75,   fatigue_max     = 100,
-             boredom_min    = 0,    boredom_max     = 50},
-            {probability = 1.00, behavior = this.sleep}
-        );
+        if (!this.current && this.queue.length > 0) {
+            this.current = this.queue.shift();
+            this.current.fn();
+        }
     }
 
-    die_hunger() {}
-    die_fatiuge() {}
-
-    eat() {}
-    sleep() {}
-    play() {}
-
+ 
     draw() {
-        let filtered_behaviors = 
-        Array.from(this.behaviors .entries())
-        .filter(([key, value]) => {
-            return this.hunger >= key.hunger_min && this.hunger < key.hunger_max &&
-                   this.fatigue >= key.fatigue_min && this.fatigue < key.fatigue_max &&
-                   this.boredom >= key.boredom_min && this.boredom < key.boredom_max;
-        })
-        .map(([key, value]) => {value});
-
-        //Select behavior from filtered_behaviors based on probability
+        // TODO: render whatever this.current.fn represents
     }
 }
+
 
 /*
 Core Game Loop:
@@ -87,9 +198,23 @@ Core Game Loop:
         //type examples here
 */
 
-function update() {
+const cat = new Cat();
+ 
+feed_button.addEventListener("click", () => cat.feed());
+play_button.addEventListener("click", () => cat.play());
+ 
+let lastTimestamp = null;
+ 
+function update(timestamp) {
+    if (lastTimestamp === null) lastTimestamp = timestamp;
+    const dt = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+ 
     background("rgb(255, 255, 255)");
+    cat.update(dt);
+    cat.draw();
+ 
     requestAnimationFrame(update);
 }
-
-update();
+ 
+requestAnimationFrame(update);
